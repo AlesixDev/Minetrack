@@ -6,7 +6,6 @@
     "finalhandler": "^1.1.2",
     "mcpe-ping-fixed": "0.0.3",
     "mcping-js": "^1.4.1",
-    "request": "2.88.2",
     "serve-static": "^1.16.2",
     "sqlite3": "^6.0.1",
     "uplot": "^1.6.32",

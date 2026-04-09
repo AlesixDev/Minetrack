@@ -4,7 +4,7 @@ export function uPlotTooltipPlugin (onHover) {
   return {
     hooks: {
       init: u => {
-        element = u.root.querySelector('.over')
+        element = u.root.querySelector('.u-over')
 
         if (!element) return
 
@@ -17,14 +17,14 @@ export function uPlotTooltipPlugin (onHover) {
 
         const { left, top, idx } = u.cursor
 
-        if (idx === null) {
+        if (idx == null) {
           onHover()
         } else {
           const bounds = element.getBoundingClientRect()
 
           onHover({
-            left: bounds.left + left + window.pageXOffset,
-            top: bounds.top + top + window.pageYOffset
+            left: bounds.left + left + window.scrollX,
+            top: bounds.top + top + window.scrollY
           }, idx)
         }
       }

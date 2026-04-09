@@ -373,19 +373,6 @@ footer a:hover {
   color: var(--text-color-inverted);
 }
 
-/* Percentage bar */
-#perc-bar {
-  height: 35px;
-  position: relative;
-  overflow-x: hidden;
-}
-
-#perc-bar .perc-bar-part {
-  height: 100%;
-  display: inline-block;
-  position: absolute;
-}
-
 /* Header rows */
 @media only screen and (max-width: 1050px) {
   header {

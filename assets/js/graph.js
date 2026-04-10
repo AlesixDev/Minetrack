@@ -14,13 +14,18 @@ export class GraphDisplayManager {
   constructor (app) {
     this._app = app
     this._graphData = []
+    this._pingGraphData = []
     this._graphTimestamps = []
     this._hasLoadedSettings = false
     this._initEventListenersOnce = false
     this._showOnlyFavorites = false
   }
 
-  addGraphPoint (timestamp, playerCounts) {
+  _isPingMode () {
+    return (this._app.graphDataMode || 'players') === 'ping'
+  }
+
+  addGraphPoint (timestamp, playerCounts, pingCounts) {
     if (!this._hasLoadedSettings) {
       // _hasLoadedSettings is controlled by #setGraphData
       // It will only be true once the context has been loaded and initial payload received
@@ -40,6 +45,14 @@ export class GraphDisplayManager {
       this._graphData[i].push(playerCounts[i])
     }
 
+    if (pingCounts) {
+      for (let i = 0; i < pingCounts.length; i++) {
+        if (this._pingGraphData[i]) {
+          this._pingGraphData[i].push(pingCounts[i])
+        }
+      }
+    }
+
     // Trim all data arrays to only the relevant portion
     // This keeps it in sync with backend data structures
     const graphMaxLength = this._app.publicConfig.graphMaxLength
@@ -49,6 +62,12 @@ export class GraphDisplayManager {
     }
 
     for (const series of this._graphData) {
+      if (series.length > graphMaxLength) {
+        series.splice(0, series.length - graphMaxLength)
+      }
+    }
+
+    for (const series of this._pingGraphData) {
       if (series.length > graphMaxLength) {
         series.splice(0, series.length - graphMaxLength)
       }
@@ -117,9 +136,10 @@ export class GraphDisplayManager {
   }
 
   getVisibleGraphData () {
+    const sourceData = this._isPingMode() ? this._pingGraphData : this._graphData
     return this._app.serverRegistry.getServerRegistrations()
       .filter(serverRegistration => serverRegistration.isVisible)
-      .map(serverRegistration => this._graphData[serverRegistration.serverId])
+      .map(serverRegistration => sourceData[serverRegistration.serverId])
   }
 
   getPlotSize () {
@@ -130,14 +150,13 @@ export class GraphDisplayManager {
   }
 
   getGraphData () {
-    return [
-      this._graphTimestamps,
-      ...this._graphData
-    ]
+    const sourceData = this._isPingMode() ? this._pingGraphData : this._graphData
+    return [this._graphTimestamps, ...sourceData]
   }
 
   getGraphDataPoint (serverId, index) {
-    const graphData = this._graphData[serverId]
+    const sourceData = this._isPingMode() ? this._pingGraphData : this._graphData
+    const graphData = sourceData[serverId]
     if (graphData && index < graphData.length && typeof graphData[index] === 'number') {
       return graphData[index]
     }
@@ -174,7 +193,7 @@ export class GraphDisplayManager {
     return closestSeriesIndex
   }
 
-  buildPlotInstance (timestamps, data) {
+  buildPlotInstance (timestamps, data, pingData) {
     // Lazy load settings from localStorage, if any and if enabled
     if (!this._hasLoadedSettings) {
       this._hasLoadedSettings = true
@@ -182,27 +201,54 @@ export class GraphDisplayManager {
       this.loadLocalStorage()
     }
 
-    for (const playerCounts of data) {
-      // Each playerCounts value corresponds to a ServerRegistration
+    for (const counts of data) {
+      // Each counts value corresponds to a ServerRegistration
       // Require each array is the length of timestamps, if not, pad at the start with null values to fit to length
       // This ensures newer ServerRegistrations do not left align due to a lower length
-      const lengthDiff = timestamps.length - playerCounts.length
+      const lengthDiff = timestamps.length - counts.length
 
       if (lengthDiff > 0) {
         const padding = Array(lengthDiff).fill(null)
 
-        playerCounts.unshift(...padding)
+        counts.unshift(...padding)
+      }
+    }
+
+    const resolvedPingData = pingData || data.map(() => [])
+
+    for (const counts of resolvedPingData) {
+      const lengthDiff = timestamps.length - counts.length
+
+      if (lengthDiff > 0) {
+        counts.unshift(...Array(lengthDiff).fill(null))
       }
     }
 
     this._graphTimestamps = timestamps
     this._graphData = data
+    this._pingGraphData = resolvedPingData
+
+    this._buildPlot()
+
+    // Show the settings-toggle element
+    document.getElementById('settings-toggle').style.display = 'inline-block'
+  }
+
+  _buildPlot () {
+    if (this._plotInstance) {
+      this._plotInstance.destroy()
+      this._plotInstance = undefined
+    }
+
+    const isPingMode = this._isPingMode()
+    const tickCount = 10
+    const maxFactor = 4
 
     const series = this._app.serverRegistry.getServerRegistrations().map(serverRegistration => {
       return {
         stroke: serverRegistration.data.color,
         width: 2,
-        value: (_, raw) => `${formatNumber(raw)} Players`,
+        value: (_, raw) => isPingMode ? `${raw} ms` : `${formatNumber(raw)} Players`,
         show: serverRegistration.isVisible,
         spanGaps: true,
         points: {
@@ -210,9 +256,6 @@ export class GraphDisplayManager {
         }
       }
     })
-
-    const tickCount = 10
-    const maxFactor = 4
 
     // eslint-disable-next-line new-cap
     this._plotInstance = new uPlot({
@@ -241,7 +284,11 @@ export class GraphDisplayManager {
                   serverName = `<span class="${this._app.favoritesManager.getIconClass(true)}"></span> ${serverName}`
                 }
 
-                return `${serverName}: ${formatNumber(point)}`
+                const value = isPingMode
+                  ? (typeof point === 'number' ? `${point} ms` : '-')
+                  : formatNumber(point)
+
+                return `${serverName}: ${value}`
               }).join('<br>') + `<br><br><strong>${formatTimestampSeconds(this._graphTimestamps[idx])}</strong>`
 
             this._app.tooltip.set(pos.left, pos.top, 10, 10, text)
@@ -255,8 +302,7 @@ export class GraphDisplayManager {
         y: false
       },
       series: [
-        {
-        },
+        {},
         ...series
       ],
       axes: [
@@ -279,8 +325,7 @@ export class GraphDisplayManager {
           split: () => {
             const visibleGraphData = this.getVisibleGraphData()
             const { scaledMax, scale } = RelativeScale.scaleMatrix(visibleGraphData, tickCount, maxFactor)
-            const ticks = RelativeScale.generateTicks(0, scaledMax, scale)
-            return ticks
+            return RelativeScale.generateTicks(0, scaledMax, scale)
           }
         }
       ],
@@ -290,7 +335,7 @@ export class GraphDisplayManager {
           range: () => {
             const visibleGraphData = this.getVisibleGraphData()
             const { scaledMin, scaledMax } = RelativeScale.scaleMatrix(visibleGraphData, tickCount, maxFactor)
-            return [scaledMin, scaledMax]
+            return [Math.min(0, scaledMin), scaledMax]
           }
         }
       },
@@ -298,9 +343,18 @@ export class GraphDisplayManager {
         show: false
       }
     }, this.getGraphData(), document.getElementById('big-graph'))
+  }
 
-    // Show the settings-toggle element
-    document.getElementById('settings-toggle').style.display = 'inline-block'
+  rebuildForMode () {
+    if (this._plotInstance) {
+      this._buildPlot()
+    }
+  }
+
+  syncModeButtons (mode) {
+    document.querySelectorAll('.graph-mode-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-mode') === mode)
+    })
   }
 
   redraw = () => {
@@ -352,6 +406,10 @@ export class GraphDisplayManager {
 
       document.querySelectorAll('.graph-controls-show').forEach((element) => {
         element.addEventListener('click', this.handleShowButtonClick, false)
+      })
+
+      document.querySelectorAll('.graph-mode-btn').forEach((element) => {
+        element.addEventListener('click', this.handleGraphModeButtonClick, false)
       })
     }
 
@@ -408,6 +466,16 @@ export class GraphDisplayManager {
     }
   }
 
+  handleGraphModeButtonClick = (event) => {
+    const mode = event.currentTarget.getAttribute('data-mode')
+
+    document.querySelectorAll('.graph-mode-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-mode') === mode)
+    })
+
+    this._app.setGraphDataMode(mode)
+  }
+
   handleSettingsToggle = () => {
     const element = document.getElementById('big-graph-controls-drawer')
 
@@ -448,6 +516,7 @@ export class GraphDisplayManager {
 
     this._graphTimestamps = []
     this._graphData = []
+    this._pingGraphData = []
     this._hasLoadedSettings = false
 
     // Fire #clearTimeout if the timeout is currently defined

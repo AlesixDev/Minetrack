@@ -2,7 +2,7 @@ import uPlot from 'uplot'
 
 import { RelativeScale } from './scale'
 
-import { formatNumber, formatTimestampSeconds, formatDate, formatMinecraftServerAddress, formatMinecraftVersions } from './util'
+import { formatNumber, formatTimestampSeconds, formatDate, formatMinecraftServerAddress } from './util'
 import { uPlotTooltipPlugin } from './plugins'
 
 import MISSING_FAVICON from 'url:../images/missing_favicon.svg'
@@ -79,7 +79,15 @@ export class ServerRegistration {
   }
 
   buildPlotInstance () {
+    const chartEl = document.getElementById(`chart_${this.serverId}`)
+    if (!chartEl) return
+
+    if (this._plotInstance) {
+      this._plotInstance.destroy()
+    }
+
     const tickCount = 4
+    const chartWidth = chartEl.offsetWidth || 520
 
     // eslint-disable-next-line new-cap
     this._plotInstance = new uPlot({
@@ -98,8 +106,8 @@ export class ServerRegistration {
           }
         })
       ],
-      height: 100,
-      width: 400,
+      height: 80,
+      width: chartWidth,
       cursor: {
         y: false,
         drag: {
@@ -141,8 +149,7 @@ export class ServerRegistration {
           },
           split: () => {
             const { scaledMin, scaledMax, scale } = RelativeScale.scale(this._graphData[1], tickCount)
-            const ticks = RelativeScale.generateTicks(scaledMin, scaledMax, scale)
-            return ticks
+            return RelativeScale.generateTicks(scaledMin, scaledMax, scale)
           }
         }
       ],
@@ -158,7 +165,7 @@ export class ServerRegistration {
       legend: {
         show: false
       }
-    }, this._graphData, document.getElementById(`chart_${this.serverId}`))
+    }, this._graphData, chartEl)
   }
 
   handlePing (payload, timestamp) {
@@ -221,10 +228,6 @@ export class ServerRegistration {
   }
 
   updateServerStatus (ping, minecraftVersions) {
-    if (ping.versions) {
-      this._renderValue('version', formatMinecraftVersions(ping.versions, minecraftVersions[this.data.type]) || '')
-    }
-
     if (ping.recordData) {
       this._renderValue('record', (element) => {
         if (ping.recordData.timestamp > 0) {
@@ -277,19 +280,20 @@ export class ServerRegistration {
     const serverElement = document.createElement('div')
 
     serverElement.id = `container_${this.serverId}`
-    serverElement.innerHTML = `<div class="column column-favicon">
-        <img class="server-favicon" src="${latestPing.favicon || MISSING_FAVICON}" id="favicon_${this.serverId}" title="${this.data.name}\n${formatMinecraftServerAddress(this.data.ip, this.data.port)}">
-        <span class="server-rank" id="ranking_${this.serverId}"></span>
+    serverElement.innerHTML = `<div class="server-info">
+        <div class="column column-favicon">
+          <img class="server-favicon" src="${latestPing.favicon || MISSING_FAVICON}" id="favicon_${this.serverId}" title="${this.data.name}\n${formatMinecraftServerAddress(this.data.ip, this.data.port)}">
+          <span class="server-rank" id="ranking_${this.serverId}"></span>
+        </div>
+        <div class="column column-status">
+          <h3 class="server-name"><span class="${this._app.favoritesManager.getIconClass(this.isFavorite)}" id="favorite-toggle_${this.serverId}"></span> ${this.data.name}</h3>
+          <span class="server-error" id="error_${this.serverId}"></span>
+          <span class="server-label" id="player-count_${this.serverId}"><span class="icon-street-view"></span> Players: <span class="server-value" id="player-count-value_${this.serverId}"></span></span>
+          <span class="server-label" id="peak_${this.serverId}"><span class="icon-sort-amount-desc"></span> ${this._app.publicConfig.graphDurationLabel} Peak: <span class="server-value" id="peak-value_${this.serverId}">-</span></span>
+          <span class="server-label" id="record_${this.serverId}"><span class="icon-star"></span> Record: <span class="server-value" id="record-value_${this.serverId}">-</span></span>
+        </div>
       </div>
-      <div class="column column-status">
-        <h3 class="server-name"><span class="${this._app.favoritesManager.getIconClass(this.isFavorite)}" id="favorite-toggle_${this.serverId}"></span> ${this.data.name}</h3>
-        <span class="server-error" id="error_${this.serverId}"></span>
-        <span class="server-label" id="player-count_${this.serverId}">Players: <span class="server-value" id="player-count-value_${this.serverId}"></span></span>
-        <span class="server-label" id="peak_${this.serverId}">${this._app.publicConfig.graphDurationLabel} Peak: <span class="server-value" id="peak-value_${this.serverId}">-</span></span>
-        <span class="server-label" id="record_${this.serverId}">Record: <span class="server-value" id="record-value_${this.serverId}">-</span></span>
-        <span class="server-label" id="version_${this.serverId}"></span>
-      </div>
-      <div class="column column-graph" id="chart_${this.serverId}"></div>`
+      <div class="server-graph" id="chart_${this.serverId}"></div>`
 
     serverElement.setAttribute('class', 'server')
 

@@ -56,7 +56,7 @@ body {
   font-family: "Open Sans", sans-serif;
   font-size: 18px;
   font-weight: 300;
-  min-width: 800px;
+  min-width: 600px;
 }
 
 /* Page layout */
@@ -211,8 +211,8 @@ footer a:hover {
 
 .server {
   padding: 5px 10px;
-  margin: 0 5px;
-  width: 800px;
+  margin: 0 5px 8px 5px;
+  width: 460px;
   display: inline-block;
 }
 
@@ -239,7 +239,7 @@ footer a:hover {
 }
 
 .server .column-status {
-  width: 282px;
+  overflow: hidden;
 }
 
 .server .column-status .server-name {
@@ -262,9 +262,21 @@ footer a:hover {
   font-size: 16px;
 }
 
-.server .column-graph {
-  height: 100px;
-  width: 400px;
+.server-info {
+  overflow: hidden;
+}
+
+.server-graph {
+  margin-top: 8px;
+}
+
+/* Graph mode toggle */
+.graph-mode-btn {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.graph-mode-btn.active {
+  color: #FFF;
 }
 
 /* Favorite icons */

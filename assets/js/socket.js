@@ -85,7 +85,11 @@ export class SocketManager {
 
           // Bulk add playerCounts into graph during #updateHistoryGraph
           if (payload.updateHistoryGraph) {
-            this._app.graphDisplayManager.addGraphPoint(payload.timestamp, Object.values(payload.updates).map(update => update.playerCount))
+            this._app.graphDisplayManager.addGraphPoint(
+              payload.timestamp,
+              Object.values(payload.updates).map(update => update.playerCount),
+              Object.values(payload.updates).map(update => update.pingMs)
+            )
 
             // Run redraw tasks after handling bulk updates
             this._app.graphDisplayManager.redraw()
@@ -97,7 +101,7 @@ export class SocketManager {
         }
 
         case 'historyGraph': {
-          this._app.graphDisplayManager.buildPlotInstance(payload.timestamps, payload.graphData)
+          this._app.graphDisplayManager.buildPlotInstance(payload.timestamps, payload.graphData, payload.pingGraphData)
 
           // Build checkbox elements for graph controls
           let lastRowCounter = 0

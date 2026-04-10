@@ -7,6 +7,7 @@ import { Tooltip, Caption, formatNumber } from './util'
 
 export class App {
   publicConfig
+  graphDataMode = 'players'
 
   constructor () {
     this.tooltip = new Tooltip()
@@ -33,6 +34,15 @@ export class App {
 
   setPublicConfig (publicConfig) {
     this.publicConfig = publicConfig
+
+    // Restore saved graph mode from localStorage
+    if (typeof localStorage !== 'undefined') {
+      const savedMode = localStorage.getItem('minetrack_graph_mode')
+      if (savedMode === 'players' || savedMode === 'ping') {
+        this.graphDataMode = savedMode
+        this.graphDisplayManager.syncModeButtons(savedMode)
+      }
+    }
 
     this.serverRegistry.assignServers(publicConfig.servers)
 
@@ -123,6 +133,14 @@ export class App {
 
     // Allow the ServerRegistration to bind any DOM events with app instance context
     serverRegistration.initEventListeners()
+  }
+
+  setGraphDataMode (mode) {
+    this.graphDataMode = mode
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('minetrack_graph_mode', mode)
+    }
+    this.graphDisplayManager.rebuildForMode()
   }
 
   updateGlobalStats = () => {
